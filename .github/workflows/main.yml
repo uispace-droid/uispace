@@ -2,6 +2,8 @@ name: Auto Publish GameMonetize to Blogger
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
 
 jobs:
   build:
@@ -52,36 +54,54 @@ jobs:
               creds = Credentials(None, refresh_token=REFRESH_TOKEN, client_id=CLIENT_ID, client_secret=CLIENT_SECRET, token_uri="https://oauth2.googleapis.com/token")
               service = build('blogger', 'v3', credentials=creds)
 
-              game = games[0]
-              title = game.get('title') or game.get('name')
-              description = game.get('description', '')
-              game_url = game.get('url', '')
-              
-              # تحويل التصنيف إلى حروف صغيرة ليتوافق مع قوالب الألعاب البرمجية
-              category = (game.get('category', 'arcade')).lower()
-              
-              thumb_url = game.get('thumb') or game.get('image') or ''
-
-              html_content = f'''
-              <div class="separator" style="clear: both; text-align: center;">
-                  <img src="{thumb_url}" alt="{title}" style="max-width: 100%; height: auto; margin-bottom: 15px;" />
-              </div>
-              <iframe src="{game_url}" width="100%" height="600px" frameborder="0" scrolling="no" allowfullscreen="true" style="border:none;"></iframe>
-              <p>{description}</p>
-              '''
-
-              post_body = {
-                  'title': title,
-                  'content': html_content,
-                  'labels': ['games', category]
-              }
-
+              existing_titles = set()
               try:
-                  request = service.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False)
-                  request.execute()
-                  print(f"تم بنجاح نشر اللعبة بالتصنيفات الجديدة: {title}")
+                  request = service.posts().list(blogId=BLOG_ID, maxResults=500)
+                  while request:
+                      response_posts = request.execute()
+                      for post in response_posts.get('items', []):
+                          existing_titles.add(post.get('title'))
+                      request = service.posts().list_next(request, response_posts)
               except Exception as e:
-                  print(f"خطأ أثناء النشر: {e}")
+                  print(f"تحذير أثناء جلب المشاركات السابقة: {e}")
+
+              published_count = 0
+              max_publish = 5
+
+              for game in games:
+                  if published_count >= max_publish:
+                      break
+
+                  title = game.get('title') or game.get('name')
+                  if not title or title in existing_titles:
+                      continue
+
+                  description = game.get('description', '')
+                  game_url = game.get('url', '')
+                  category = game.get('category', 'Arcade')
+                  thumb_url = game.get('thumb') or game.get('image') or ''
+
+                  html_content = f'''
+                  <div class="separator" style="clear: both; text-align: center;">
+                      <img src="{thumb_url}" alt="{title}" style="max-width: 100%; height: auto; margin-bottom: 15px;" />
+                  </div>
+                  <iframe src="{game_url}" width="100%" height="600px" frameborder="0" scrolling="no" allowfullscreen="true" style="border:none;"></iframe>
+                  <p>{description}</p>
+                  '''
+
+                  post_body = {
+                      'title': title,
+                      'content': html_content,
+                      'labels': ['Games', category]
+                  }
+
+                  try:
+                      request = service.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False)
+                      request.execute()
+                      print(f"تم بنجاح نشر اللعبة: {title}")
+                      published_count += 1
+                  except Exception as e:
+                      print(f"خطأ أثناء النشر: {e}")
 
           if __name__ == '__main__':
               main()
