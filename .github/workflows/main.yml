@@ -18,10 +18,10 @@ jobs:
 
       - name: Run publisher script
         env:
-          BLOG_ID: ${{ secrets.BLOG_ID }}
-          CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+          BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
+          CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
         run: |
           python - << 'EOF'
           import os
@@ -39,7 +39,7 @@ jobs:
                   print("خطأ: يرجى التحقق من إعدادات الـ Secrets في جيت هب.")
                   return
 
-              # إنشاء كاشف يتجاوز حماية Cloudflare
+              # إنشاء كاشف لتجاوز حماية Cloudflare
               scraper = cloudscraper.create_scraper()
               
               url = 'https://gamemonetize.com/feed.php?format=0&page=1'
@@ -78,7 +78,7 @@ jobs:
                   game_url = game.get('url', '')
                   category = game.get('category', 'Arcade')
 
-                  # المحتوى النظيف الذي سيتكفل القالب الجديد بتنسيقه
+                  # المحتوى النظيف الذي يتكفل القالب الجديد بتنسيقه
                   html_content = f'''
                   <iframe src="{game_url}" width="100%" height="100%" frameborder="0" scrolling="no" allowfullscreen="true" style="border:none;"></iframe>
                   <p>{description}</p>
@@ -102,7 +102,7 @@ jobs:
                   except Exception as e:
                       print(f"خطأ أثناء نشر {title}: {e}")
 
-                  # نشر أول 10 ألعاب في كل عملية لتفادي حدود الاستهلاك
+                  # نشر أول 10 ألعاب في كل عملية تشغيل
                   if published_count >= 10:
                       break
 
