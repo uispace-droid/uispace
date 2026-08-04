@@ -1,9 +1,9 @@
-name: Publish Games to Blogger
+name: Auto Publish GameMonetize to Blogger
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # يتم تشغيل الأتمتة تلقائياً كل 6 ساعات لجلب ونشر ألعاب جديدة
-  workflow_dispatch:      # يتيح لك تشغيل الأتمتة يدوياً متى شئت من زر Run workflow
+    - cron: '0 */6 * * *'  # يعمل تلقائياً كل 6 ساعات
+  workflow_dispatch:      # يتيح التشغيل اليدوي أيضاً عند الحاجة
 
 jobs:
   build:
@@ -21,7 +21,7 @@ jobs:
         run: |
           pip install requests google-auth google-auth-oauthlib google-api-python-client
 
-      - name: Run Publisher Script
+      - name: Run GameMonetize Publisher
         env:
           BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
           BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
@@ -34,7 +34,7 @@ jobs:
           from google.oauth2.credentials import Credentials
           from googleapiclient.discovery import build
 
-          # إعداد بيانات الاتصال بمدونة بلوجر باستخدام الأسرار المحفوظة مسبقاً
+          # إعداد بيانات المصادقة لمدونة بلوجر
           creds = Credentials(
               None,
               refresh_token=os.environ.get('BLOGGER_REFRESH_TOKEN'),
@@ -46,13 +46,61 @@ jobs:
           blogger_service = build('blogger', 'v3', credentials=creds)
           blog_id = os.environ.get('BLOGGER_BLOG_ID')
 
-          # جلب لعبة فلاش تجريبية ونشرها تلقائياً على المدونة
-          post_body = {
-              'title': 'لعبة جديدة - Flash Game',
-              'content': '<div style=\'text-align:center\'><iframe src=\'https://html5.gamedistribution.com/\' width=\'100%\' height=\'600px\' frameborder=\'0\' scrolling=\'no\'></iframe></div><p>استمتع بأحدث ألعاب الفلاش والـ HTML5 مباشرة على المدونة.</p>'
-          }
+          # 1. جلب عناوين المنشورات الموجودة مسبقاً لتجنب التكرار
+          existing_titles = set()
+          try:
+              posts_request = blogger_service.posts().list(blogId=blog_id, maxResults=500)
+              posts_response = posts_request.execute()
+              if 'items' in posts_response:
+                  for post in posts_response['items']:
+                      existing_titles.add(post.get('title'))
+          except Exception as e:
+              print('ملاحظة أثناء جلب المنشورات القديمة:', e)
 
-          request = blogger_service.posts().insert(blogId=blog_id, body=post_body)
-          response = request.execute()
-          print('تم نشر اللعبة بنجاح! معرف المشاركة:', response.get('id'))
+          # 2. جلب الألعاب من API GameMonetize
+          api_url = 'https://gamemonetize.com/feed.php?format=0&page=1'
+          response = requests.get(api_url)
+          
+          if response.status_code == 200:
+              games = response.json()
+              selected_game = None
+              
+              # البحث عن أول لعبة لم يتم نشرها مسبقاً
+              for game in games:
+                  game_title = game.get('title', '')
+                  if game_title and game_title not in existing_titles:
+                      selected_game = game
+                      break
+              
+              if selected_game:
+                  game_title = selected_game.get('title')
+                  game_thumbnail = selected_game.get('image', '')
+                  game_description = selected_game.get('description', 'استمتع بأحدث ألعاب HTML5 مباشرة.')
+                  game_category = selected_game.get('category', 'ألعاب')
+                  game_url = selected_game.get('url', '')
+                  
+                  # تصميم محتوى المنشور ليشمل الصورة والوصف وإطار اللعبة
+                  content_html = f'''
+                  <div style=\"text-align:center; margin-bottom: 20px;\">
+                      <img src=\"{game_thumbnail}\" alt=\"{game_title}\" style=\"max-width:100%; height:auto; border-radius: 8px;\" />
+                  </div>
+                  <div style=\"margin-bottom: 20px; font-size: 16px; line-height: 1.6;\">
+                      <p><strong>وصف اللعبة:</strong> {game_description}</p>
+                  </div>
+                  <div style=\"text-align:center\">
+                      <iframe src=\"{game_url}\" width=\"100%\" height=\"600px\" frameborder=\"0\" scrolling=\"no\"></iframe>
+                  </div>
+                  '''
+
+                  post_body = {
+                      'title': game_title,
+                      'content': content_html,
+                      'labels': [game_category]
+                  }
+
+                  request = blogger_service.posts().insert(blogId=blog_id, body=post_body)
+                  result = request.execute()
+                  print('تم نشر اللعبة بنجاح من GameMonetize! المعرف:', result.get('id'))
+              else:
+                  print('جميع الألعاب في هذه الصفحة تم نشرها مسبقاً!')
           "
