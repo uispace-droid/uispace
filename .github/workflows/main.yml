@@ -3,7 +3,7 @@ name: Auto Publish GameMonetize to Blogger
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */3 * * *'
+    - cron: '* * * * *'
 
 jobs:
   build:
@@ -57,7 +57,7 @@ jobs:
 
               scraper = cloudscraper.create_scraper()
               published_count = 0
-              max_publish = 5
+              max_publish = 1
               page = 1
               max_pages = 5
 
