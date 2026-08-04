@@ -35,6 +35,32 @@ jobs:
           REFRESH_TOKEN = os.environ.get('REFRESH_TOKEN')
 
           def main():
+              # التحقق من وجود المفاتيح السرية
+              if not all([BLOG_ID, CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN]):
+                  print("خطأ: يرجى التأكد من إضافة جميع الـ Secrets داخل إعدادات جيت هب (BLOG_ID, CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN).")
+                  return
+
+              # ترويسة متصفح لتفادي حظر GameMonetize
+              headers = {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+              }
+              
+              url = 'https://gamemonetize.com/feed.php?format=json'
+              print("جاري جلب قائمة الألعاب من GameMonetize...")
+              response = requests.get(url, headers=headers)
+
+              if response.status_code != 200:
+                  print(f"فشل الاتصال بالموقع. كود الاستجابة: {response.status_code}")
+                  return
+
+              try:
+                  games = response.json()
+              except Exception as e:
+                  print("حدث خطأ أثناء قراءة قائمة الألعاب (JSON):", e)
+                  print("استجابة الموقع كانت:", response.text[:200])
+                  return
+
+              # الاتصال بـ Blogger API
               creds = Credentials(
                   None,
                   refresh_token=REFRESH_TOKEN,
@@ -44,19 +70,15 @@ jobs:
               )
               service = build('blogger', 'v3', credentials=creds)
 
-              response = requests.get('https://gamemonetize.com/feed.php?format=json')
-              games = response.json()
-
-              print(f"تم العثور على {len(games)} لعبة. جارٍ النشر بكل التفاصيل...")
+              print(f"تم جلب {len(games)} لعبة بنجاح. جارٍ البدء في النشر...")
 
               for game in games:
                   title = game.get('title')
                   description = game.get('description', '')
-                  thumb = game.get('thumb', '')      # رابط صورة اللعبة
-                  game_url = game.get('url', '')     # رابط اللعبة (iframe)
-                  category = game.get('category', 'Arcade') # تصنيف اللعبة
+                  thumb = game.get('thumb', '')
+                  game_url = game.get('url', '')
+                  category = game.get('category', 'Arcade')
 
-                  # تنسيق المحتوى ليشمل الصورة، الوصف، واللعبة
                   html_content = f'''
                   <div class="game-container" style="text-align:center;">
                       <div style="margin-bottom:15px;">
@@ -71,7 +93,6 @@ jobs:
                   </div>
                   '''
 
-                  # إرسال العنوان، المحتوى، والتصنيف (Labels)
                   post_body = {
                       'title': title,
                       'content': html_content,
@@ -81,9 +102,9 @@ jobs:
                   try:
                       request = service.posts().insert(blogId=BLOG_ID, body=post_body)
                       request.execute()
-                      print(f"تم نشر اللعبة بنجاح: {title} (التصنيف: {category})")
+                      print(f"تم نشر اللعبة بنجاح: {title}")
                   except Exception as e:
-                      print(f"خطأ أثناء نشر اللعبة {title}: {e}")
+                      print(f"خطأ أثناء نشر {title}: {e}")
 
           if __name__ == '__main__':
               main()
