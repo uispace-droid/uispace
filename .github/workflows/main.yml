@@ -56,12 +56,9 @@ jobs:
                   print(f"تحذير أثناء جلب المشاركات السابقة: {e}")
 
               scraper = cloudscraper.create_scraper()
-              published_count = 0
-              max_publish = 1
               page = 1
-              max_pages = 5
 
-              while published_count < max_publish and page <= max_pages:
+              while True:
                   url = f'https://gamemonetize.com/feed.php?format=0&page={page}'
                   print(f"جاري فحص الصفحة {page} من الألعاب...")
                   response = scraper.get(url)
@@ -72,12 +69,10 @@ jobs:
 
                   games = response.json()
                   if not games:
+                      print("تم الانتهاء من جميع صفحات الألعاب.")
                       break
 
                   for game in games:
-                      if published_count >= max_publish:
-                          break
-
                       title = game.get('title') or game.get('name')
                       if not title or title in existing_titles:
                           continue
@@ -106,7 +101,6 @@ jobs:
                           request_post.execute()
                           print(f"تم بنجاح نشر اللعبة: {title}")
                           existing_titles.add(title)
-                          published_count += 1
                       except Exception as e:
                           print(f"خطأ أثناء النشر: {e}")
 
