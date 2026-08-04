@@ -1,0 +1,58 @@
+name: Publish Games to Blogger
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # يتم تشغيل الأتمتة تلقائياً كل 6 ساعات لجلب ونشر ألعاب جديدة
+  workflow_dispatch:      # يتيح لك تشغيل الأتمتة يدوياً متى شئت من زر Run workflow
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install requests google-auth google-auth-oauthlib google-api-python-client
+
+      - name: Run Publisher Script
+        env:
+          BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
+          BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
+          BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
+          BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
+        run: |
+          python -c "
+          import os
+          import requests
+          from google.oauth2.credentials import Credentials
+          from googleapiclient.discovery import build
+
+          # إعداد بيانات الاتصال بمدونة بلوجر باستخدام الأسرار المحفوظة مسبقاً
+          creds = Credentials(
+              None,
+              refresh_token=os.environ.get('BLOGGER_REFRESH_TOKEN'),
+              client_id=os.environ.get('BLOGGER_CLIENT_ID'),
+              client_secret=os.environ.get('BLOGGER_CLIENT_SECRET'),
+              token_uri='https://oauth2.googleapis.com/token'
+          )
+          
+          blogger_service = build('blogger', 'v3', credentials=creds)
+          blog_id = os.environ.get('BLOGGER_BLOG_ID')
+
+          # جلب لعبة فلاش تجريبية ونشرها تلقائياً على المدونة
+          post_body = {
+              'title': 'لعبة جديدة - Flash Game',
+              'content': '<div style=\'text-align:center\'><iframe src=\'https://html5.gamedistribution.com/\' width=\'100%\' height=\'600px\' frameborder=\'0\' scrolling=\'no\'></iframe></div><p>استمتع بأحدث ألعاب الفلاش والـ HTML5 مباشرة على المدونة.</p>'
+          }
+
+          request = blogger_service.posts().insert(blogId=blog_id, body=post_body)
+          response = request.execute()
+          print('تم نشر اللعبة بنجاح! معرف المشاركة:', response.get('id'))
+          "
