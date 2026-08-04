@@ -3,7 +3,7 @@ name: Auto Publish GameMonetize to Blogger
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */3 * * *'
 
 jobs:
   build:
@@ -41,16 +41,6 @@ jobs:
                   print("خطأ في بيانات الـ Secrets.")
                   return
 
-              scraper = cloudscraper.create_scraper()
-              url = 'https://gamemonetize.com/feed.php?format=0&page=1'
-              print("جاري جلب الألعاب...")
-              response = scraper.get(url)
-
-              if response.status_code != 200:
-                  print("فشل الاتصال بالموقع.")
-                  return
-
-              games = response.json()
               creds = Credentials(None, refresh_token=REFRESH_TOKEN, client_id=CLIENT_ID, client_secret=CLIENT_SECRET, token_uri="https://oauth2.googleapis.com/token")
               service = build('blogger', 'v3', credentials=creds)
 
@@ -65,43 +55,62 @@ jobs:
               except Exception as e:
                   print(f"تحذير أثناء جلب المشاركات السابقة: {e}")
 
+              scraper = cloudscraper.create_scraper()
               published_count = 0
               max_publish = 5
+              page = 1
+              max_pages = 5
 
-              for game in games:
-                  if published_count >= max_publish:
+              while published_count < max_publish and page <= max_pages:
+                  url = f'https://gamemonetize.com/feed.php?format=0&page={page}'
+                  print(f"جاري فحص الصفحة {page} من الألعاب...")
+                  response = scraper.get(url)
+
+                  if response.status_code != 200:
+                      print(f"فشل الاتصال بالموقع في الصفحة {page}.")
                       break
 
-                  title = game.get('title') or game.get('name')
-                  if not title or title in existing_titles:
-                      continue
+                  games = response.json()
+                  if not games:
+                      break
 
-                  description = game.get('description', '')
-                  game_url = game.get('url', '')
-                  category = game.get('category', 'Arcade')
-                  thumb_url = game.get('thumb') or game.get('image') or ''
+                  for game in games:
+                      if published_count >= max_publish:
+                          break
 
-                  html_content = f'''
-                  <div class="separator" style="clear: both; text-align: center;">
-                      <img src="{thumb_url}" alt="{title}" style="max-width: 100%; height: auto; margin-bottom: 15px;" />
-                  </div>
-                  <iframe src="{game_url}" width="100%" height="600px" frameborder="0" scrolling="no" allowfullscreen="true" style="border:none;"></iframe>
-                  <p>{description}</p>
-                  '''
+                      title = game.get('title') or game.get('name')
+                      if not title or title in existing_titles:
+                          continue
 
-                  post_body = {
-                      'title': title,
-                      'content': html_content,
-                      'labels': ['Games', category]
-                  }
+                      description = game.get('description', '')
+                      game_url = game.get('url', '')
+                      category = game.get('category', 'Arcade')
+                      thumb_url = game.get('thumb') or game.get('image') or ''
 
-                  try:
-                      request = service.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False)
-                      request.execute()
-                      print(f"تم بنجاح نشر اللعبة: {title}")
-                      published_count += 1
-                  except Exception as e:
-                      print(f"خطأ أثناء النشر: {e}")
+                      html_content = f'''
+                      <div class="separator" style="clear: both; text-align: center;">
+                          <img src="{thumb_url}" alt="{title}" style="max-width: 100%; height: auto; margin-bottom: 15px;" />
+                      </div>
+                      <iframe src="{game_url}" width="100%" height="600px" frameborder="0" scrolling="no" allowfullscreen="true" style="border:none;"></iframe>
+                      <p>{description}</p>
+                      '''
+
+                      post_body = {
+                          'title': title,
+                          'content': html_content,
+                          'labels': ['Games', category]
+                      }
+
+                      try:
+                          request_post = service.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False)
+                          request_post.execute()
+                          print(f"تم بنجاح نشر اللعبة: {title}")
+                          existing_titles.add(title)
+                          published_count += 1
+                      except Exception as e:
+                          print(f"خطأ أثناء النشر: {e}")
+
+                  page += 1
 
           if __name__ == '__main__':
               main()
